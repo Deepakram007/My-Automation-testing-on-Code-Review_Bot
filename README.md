@@ -1,14 +1,55 @@
-# AI-Powered Code Review Bot 🤖🚀
+# AI-Powered Code Review Bot 🤖
 
-An automated, enterprise-grade GitHub App that reviews pull requests using AI, enforces organization-specific rules, learns from developer feedback, and sends notifications to Slack. 
+> An enterprise-grade, multi-tenant GitHub App that automatically reviews pull requests using AI, enforces team-specific coding standards, learns from developer feedback, and delivers real-time Slack notifications — all backed by a React dashboard.
 
-Built using a scalable, multi-tenant **Node.js, TypeScript, Express, BullMQ, Redis, and PostgreSQL** stack.
+<div align="center">
+
+![Node.js](https://img.shields.io/badge/Node.js-18+-339933?style=for-the-badge&logo=node.js&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5+-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-BullMQ-DC382D?style=for-the-badge&logo=redis&logoColor=white)
+![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4o-412991?style=for-the-badge&logo=openai&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+
+</div>
+
+---
+
+## 📋 Table of Contents
+
+- [Overview](#-overview)
+- [Architecture](#️-architecture--decoupled-execution)
+- [Key Capabilities](#-key-capabilities)
+- [Tech Stack](#️-tech-stack)
+- [Database Schema](#-database-schema)
+- [Project Structure](#-project-structure)
+- [Configuration](#️-configuration-setup)
+- [Running the Platform](#-running-the-platform)
+- [REST API Reference](#-rest-api-reference)
+- [Dashboard (Frontend)](#-dashboard-frontend)
+
+---
+
+## 🌟 Overview
+
+This project is a full-stack, **production-ready SaaS platform** that integrates directly with GitHub as a GitHub App. When a pull request is opened or updated, the bot:
+
+1. Receives a signed webhook event from GitHub
+2. Queues it asynchronously for AI analysis
+3. Filters noise (lock files, binaries, etc.) and extracts only the meaningful diff hunks
+4. Sends the cleaned diff to OpenAI for structured code review
+5. Posts inline comments directly on the PR with severity-tagged issues
+6. Tracks developer feedback to improve future reviews via a sentiment loop
+7. Sends a summary notification to Slack
+
+Organizations can configure custom review rules per repo, manage subscription tiers, and monitor usage — all through a React-based dashboard.
 
 ---
 
 ## 🏗️ Architecture & Decoupled Execution
 
-The system uses an asynchronous **producer-consumer queue architecture** built on top of **BullMQ** and **Redis**. This decouples the webhook ingestion from the heavy LLM analysis and database writes:
+The system uses an asynchronous **producer-consumer queue architecture** built on **BullMQ** and **Redis**. This decouples webhook ingestion from heavy LLM analysis, ensuring webhooks always respond in `< 10ms`.
 
 ```
                   ┌──────────────────────┐
@@ -51,112 +92,318 @@ The system uses an asynchronous **producer-consumer queue architecture** built o
 
 ## ⚡ Key Capabilities
 
-### 🛡️ Multi-Tenant SaaS DB Model
-The database tracks multiple organizations (`Organizations` table) separately. Each tenant gets its own configuration of guidelines (`TeamRule`), PR review tracking, and monthly quota limits (`UsageTracking`).
+### 🛡️ Multi-Tenant SaaS Architecture
+- Each **Organization** is an isolated tenant with its own rules, repositories, usage tracking, and billing plan.
+- Role-based membership (`OWNER`, `ADMIN`, `MEMBER`) per organization.
+- Full **Audit Log** trail for every tenant action, suitable for compliance and security monitoring.
 
 ### 💰 Cost-Optimized AI Engine
-- **Intelligent File Filtering**: Excludes dependency locks (`package-lock.json`), binaries, media formats, and environment files before sending to the LLM.
-- **Hunk-Based Parsing**: Uses a custom unified patch parser to only extract changed and added line blocks.
-- **Batched Reviews**: Consolidates modified files in a single LLM prompt, reducing token consumption.
-- **Line Validation**: Validates AI recommendations against modified line arrays to prevent comment post errors on unchanged code blocks.
+- **Intelligent File Filtering** — Excludes `package-lock.json`, binaries, media, and `.env` files before LLM calls.
+- **Hunk-Based Diff Parsing** — Custom unified patch parser extracts only changed/added line blocks (not the entire file).
+- **Batched Reviews** — Consolidates all changed files in a single structured LLM prompt to minimize token usage.
+- **Line Validation** — Validates AI comment line numbers against the actual modified lines to prevent invalid inline comments.
 
 ### 🧠 Developer Sentiment Feedback Loop
-- Evaluates replies to the bot's review comments on GitHub.
-- Uses sentiment analysis to classify developer feedback as `APPROVED` (agreed/fixed) or `REJECTED` (disagreed/false positive).
-- Feedback is fed into future prompts as few-shot training examples, helping the bot adapt to team-specific preferences over time.
+- Monitors developer replies to bot comments on GitHub.
+- Classifies replies as `APPROVED` (fix confirmed) or `REJECTED` (false positive) using sentiment analysis.
+- Approved/rejected examples are fed back as few-shot examples in future prompts so the bot adapts to team preferences over time.
+
+### 📊 Subscription & Usage Billing
+- Three billing tiers: `FREE`, `PRO`, `ENTERPRISE` — each with configurable monthly PR limits.
+- Monthly usage is tracked per organization; reviews are blocked when quotas are exceeded.
+- Stripe customer ID field ready for payment integration.
+
+### 📏 Custom Team Rules Engine
+- Organizations can define rules per repository pattern (e.g., `owner/repo` or `*`).
+- Rule types: `BUG`, `PERFORMANCE`, `SECURITY`, `STYLE`, `GENERAL`.
+- Rules are injected directly into the AI prompt as enforceable guidelines.
+
+### 🔔 Slack Notifications
+- Summary of every completed review posted to a configured Slack webhook.
+- Delivered via a dedicated `slack-queue` to keep the review pipeline non-blocking.
 
 ---
 
 ## 🛠️ Tech Stack
-- **Core runtime:** Node.js, TypeScript (v5+)
-- **HTTP Routing:** Express, CORS, Morgan
-- **ORM & Database:** Prisma, PostgreSQL
-- **Background Queues:** BullMQ, Ioredis (Redis)
-- **API Clients:** Octokit (GitHub API), OpenAI (structured JSON completions)
-- **Validation:** Zod (Type-safe env validation)
+
+### Backend
+| Layer | Technology |
+|---|---|
+| Runtime | Node.js 18+, TypeScript 5+ |
+| HTTP Framework | Express, CORS, Morgan |
+| ORM & Database | Prisma ORM, PostgreSQL 15 |
+| Background Queues | BullMQ, ioredis (Redis) |
+| GitHub Integration | Octokit (REST & Webhook APIs) |
+| AI / LLM | OpenAI SDK (GPT-4o / structured JSON completions) |
+| Env Validation | Zod |
+
+### Frontend (Dashboard)
+| Layer | Technology |
+|---|---|
+| Framework | React 19 + TypeScript |
+| Build Tool | Vite 8 |
+| Routing | React Router DOM v7 |
+| Charts | Recharts |
+| Icons | Lucide React |
+
+### Infrastructure
+| Service | Technology |
+|---|---|
+| Containerization | Docker, Docker Compose |
+| Database | PostgreSQL 15 (Docker) |
+| Cache / Queue Broker | Redis Alpine (Docker) |
+
+---
+
+## 🗄️ Database Schema
+
+```
+┌───────────────┐       ┌─────────────────────┐       ┌──────────────┐
+│     User      │──────▶│ OrganizationMember  │◀──────│ Organization │
+│               │       └─────────────────────┘       │              │
+│ id (uuid)     │                                      │ id (uuid)    │
+│ email         │                                      │ name         │
+│ githubId      │                                      │ githubOrgId  │
+│ githubToken   │                                      │ billingPlan  │
+└───────────────┘                                      └──────┬───────┘
+                                                              │
+                   ┌──────────────────────────────────────────┤
+                   │                  │                        │
+                   ▼                  ▼                        ▼
+           ┌──────────────┐   ┌──────────────┐       ┌──────────────────┐
+           │  Repository  │   │   TeamRule   │       │  UsageTracking   │
+           │              │   │              │       │                  │
+           │ githubRepoId │   │ ruleType     │       │ prReviewedCount  │
+           │ fullName     │   │ description  │       │ tokensUsed       │
+           │ isActive     │   │ repoPattern  │       │ currentMonth     │
+           └──────┬───────┘   └──────────────┘       └──────────────────┘
+                  │
+                  ▼
+          ┌──────────────┐
+          │  PullRequest │
+          │              │
+          │ prNumber     │
+          │ title        │
+          │ author       │
+          │ state        │
+          └──────┬───────┘
+                 │
+                 ▼
+          ┌──────────────┐
+          │    Review    │
+          │              │
+          │ status       │
+          │ stats (JSON) │
+          │ cost         │
+          └──────┬───────┘
+                 │
+                 ▼
+        ┌────────────────┐
+        │ ReviewComment  │
+        │                │
+        │ filePath       │
+        │ line           │
+        │ explanation    │
+        │ suggestion     │
+        │ severity       │  ← CRITICAL | WARNING | SUGGESTION
+        │ commentType    │  ← BUG | SECURITY | PERFORMANCE | STYLE
+        │ status         │  ← PENDING | APPROVED | REJECTED
+        │ feedbackText   │
+        └────────────────┘
+```
+
+---
+
+## 📁 Project Structure
+
+```
+AI-Powered-Code-Review-Bot/
+├── client/                        # React dashboard (Vite + TypeScript)
+│   └── src/
+│       ├── api/                   # API client functions
+│       ├── components/            # Reusable UI components
+│       ├── pages/                 # Route-level page components
+│       ├── App.tsx                # Router setup
+│       └── main.tsx               # Entry point
+│
+├── src/                           # Express backend (TypeScript)
+│   ├── config/                    # Environment & app config (Zod validated)
+│   ├── middlewares/               # Auth, error handling, logging
+│   ├── queues/                    # BullMQ queue definitions & workers
+│   ├── routes/                    # REST API route handlers
+│   ├── services/
+│   │   ├── aiService.ts           # OpenAI prompt builder + reviewer
+│   │   ├── diffParser.ts          # Unified diff hunk extractor
+│   │   ├── feedbackService.ts     # Sentiment classification loop
+│   │   └── usageService.ts        # Monthly quota enforcement
+│   ├── webhooks/                  # GitHub webhook event handlers
+│   ├── app.ts                     # Express app setup
+│   └── index.ts                   # Server entry point + worker bootstrap
+│
+├── prisma/
+│   └── schema.prisma              # Full Prisma data model
+│
+├── Dockerfile                     # Production container image
+├── docker-compose.yml             # Local dev: PostgreSQL + Redis + App
+├── seed.ts                        # Database seed script
+├── .env.example                   # Environment variable template
+└── package.json
+```
 
 ---
 
 ## ⚙️ Configuration Setup
 
-Create a `.env` file in the root directory using the keys below:
+Copy `.env.example` to `.env` and fill in your values:
 
 ```env
+# Server
 PORT=3000
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/review_bot?schema=public"
-REDIS_URL="redis://localhost:6379"
 NODE_ENV="development"
 
-# OpenAI Keys
+# Database
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/review_bot?schema=public"
+
+# Redis (BullMQ broker)
+REDIS_URL="redis://localhost:6379"
+
+# OpenAI
 OPENAI_API_KEY="your-openai-api-key"
 OPENAI_MODEL="gpt-4o-mini"
 
-# GitHub App Integration
+# GitHub App
 GITHUB_APP_ID="your-github-app-id"
 GITHUB_PRIVATE_KEY="base64-encoded-private-key"
 GITHUB_WEBHOOK_SECRET="your-github-webhook-secret"
 
-# Slack Notification Webhook
+# Slack
 SLACK_WEBHOOK_URL="your-slack-webhook-url"
 ```
+
+> **Note:** `GITHUB_PRIVATE_KEY` must be the Base64-encoded version of the `.pem` file downloaded from your GitHub App settings.
 
 ---
 
 ## 🚀 Running the Platform
 
 ### Prerequisites
-- Node.js (>= 18)
-- Docker & Docker Desktop (Make sure the **Docker Desktop application is running** on your system to connect to the daemon)
+- **Node.js** >= 18
+- **Docker Desktop** (must be running to start containers)
 
-### Step 1: Spin up PostgreSQL and Redis Databases
-Launch local Docker containers for storage:
+---
+
+### Step 1 — Start Infrastructure
+
+Spin up PostgreSQL and Redis in Docker:
+
 ```bash
 docker-compose up db redis -d
 ```
 
-### Step 2: Install Packages & Generate Types
+---
+
+### Step 2 — Install Dependencies
+
 ```bash
+# Backend
 npm install
-npm run prisma:generate
+
+# Frontend
+cd client && npm install && cd ..
 ```
 
-### Step 3: Run Database Migrations
-Create the tables and indices in PostgreSQL:
+---
+
+### Step 3 — Generate Prisma Client & Migrate DB
+
 ```bash
+npm run prisma:generate
 npm run prisma:migrate
 ```
 
-### Step 4: Run Application
-- **Development Mode (Hot Reload):**
-  ```bash
-  npm run dev
-  ```
-- **Production Mode (Compiled):**
-  ```bash
-  npm run build
-  npm start
-  ```
+---
+
+### Step 4 — Run the App
+
+**Backend (with hot-reload):**
+```bash
+npm run dev
+```
+
+**Frontend Dashboard:**
+```bash
+cd client && npm run dev
+```
+
+**Production Build:**
+```bash
+npm run build
+npm start
+```
+
+**Full Docker Stack (App + DB + Redis):**
+```bash
+docker-compose up --build
+```
 
 ---
 
 ## 📡 REST API Reference
 
 ### Health Diagnostics
-- `GET /health` — Returns status of Postgres and Redis connections.
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/health` | Returns status of PostgreSQL and Redis connections |
 
-### Team Rules Rules Engine
-- `GET /api/rules?organizationId=<id>` — Fetch rules configured for the organization.
-- `POST /api/rules` — Register a new rule block.
-- `PUT /api/rules/:id` — Update rule criteria/state.
-- `DELETE /api/rules/:id` — Delete rule configuration.
+### Team Rules Engine
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/rules?organizationId=<id>` | Fetch all rules for an organization |
+| `POST` | `/api/rules` | Create a new custom rule |
+| `PUT` | `/api/rules/:id` | Update an existing rule |
+| `DELETE` | `/api/rules/:id` | Delete a rule |
 
 ### Metrics & Sentiment History
-- `GET /api/feedback/stats` — Review count aggregates and accuracy metrics.
-- `GET /api/feedback/history` — Paginated history of developer sentiment classification logs.
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/feedback/stats` | Aggregate review counts and AI accuracy metrics |
+| `GET` | `/api/feedback/history` | Paginated sentiment classification history |
 
 ### Billing & Subscription Management
-- `GET /api/billing/usage/:orgId` — Check organization monthly PR reviews usage vs subscription limits.
-- `POST /api/billing/tier/:orgId` — Update organization plan (`FREE`, `PRO`, or `ENTERPRISE`).
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/billing/usage/:orgId` | Monthly PR review usage vs. subscription limit |
+| `POST` | `/api/billing/tier/:orgId` | Update plan (`FREE` \| `PRO` \| `ENTERPRISE`) |
 
-### Security Audit Trails
-- `GET /api/audit/:orgId` — Returns tenant action history logs for compliance monitoring.
+### Security & Audit
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/audit/:orgId` | Tenant action history for compliance monitoring |
+
+---
+
+## 🖥️ Dashboard (Frontend)
+
+The React dashboard (located in `client/`) connects to the backend API and provides:
+
+- **Overview** — Live stats: PRs reviewed, comments posted, tokens used, accuracy rate
+- **Feedback History** — Paginated table of AI comments with developer sentiment outcomes
+- **Rules Manager** — CRUD interface to manage team-specific review rules per organization
+- **Billing** — View monthly usage and upgrade subscription tier
+- **Audit Logs** — Security trail of all organization-level actions
+
+---
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/your-feature`
+3. Commit changes: `git commit -m 'feat: add your feature'`
+4. Push to the branch: `git push origin feature/your-feature`
+5. Open a Pull Request — the bot will review it! 🤖
+
+---
+
+## 📄 License
+
+This project is private and proprietary.
