@@ -1,0 +1,100 @@
+name: Automated Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Run UI and API Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: review_bot
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 18
+
+    - name: Install pnpm
+      uses: pnpm/action-setup@v3
+      with:
+        version: 9
+
+    - name: Install dependencies
+      run: |
+        pnpm install
+        cd client && pnpm install
+
+    - name: Install Playwright Browsers
+      run: pnpm exec playwright install --with-deps chromium
+
+    - name: Run Prisma migrations
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/review_bot?schema=public
+      run: pnpm exec prisma db push
+
+    - name: Start services
+      env:
+        PORT: 3000
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/review_bot?schema=public
+        REDIS_URL: redis://localhost:6379
+        NODE_ENV: development
+      run: |
+        # Start backend
+        pnpm run dev &
+        
+        # Start frontend
+        cd client
+        pnpm run dev &
+        
+        # Wait for services to be ready
+        echo "Waiting for backend on port 3000..."
+        while ! nc -z localhost 3000; do sleep 1; done
+        echo "Backend is up!"
+        
+        echo "Waiting for frontend on port 5173..."
+        while ! nc -z localhost 5173; do sleep 1; done
+        echo "Frontend is up!"
+
+    - name: Run Playwright tests
+      env:
+        API_URL: http://localhost:3000
+        CLIENT_URL: http://localhost:5173
+      run: pnpm run test:e2e
+
+    - name: Upload Playwright report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: playwright-report
+        path: playwright-report/
+        retention-days: 14
