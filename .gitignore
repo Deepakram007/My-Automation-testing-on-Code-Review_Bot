@@ -36,3 +36,7 @@ lerna-debug.log*
 # OS metadata files
 .DS_Store
 Thumbs.db
+
+# Playwright Test Outputs
+playwright-report/
+test-results/
