@@ -6,6 +6,9 @@ test.describe('Authentication Flow @smoke @regression', () => {
   });
 
   test('should display error message on invalid credentials', async ({ page }) => {
+    // Verify the login page loaded (has "Sign In" heading)
+    await expect(page.getByText('Sign In')).toBeVisible();
+
     // Fill in the login form with wrong details
     await page.fill('input[type="email"]', 'wrong@example.com');
     await page.fill('input[type="password"]', 'badpass');
@@ -25,12 +28,12 @@ test.describe('Authentication Flow @smoke @regression', () => {
     // Submit
     await page.click('button[type="submit"]');
 
-    // Verify redirect to dashboard (Overview page)
+    // Verify redirect to dashboard (URL becomes /)
     await expect(page).toHaveURL('/');
     
-    // Verify an element from the dashboard is visible
-    await expect(page.getByText('Code Review Bot', { exact: false })).toBeVisible();
-    
+    // Verify sidebar "Antigravity" logo text is visible (confirms dashboard loaded)
+    await expect(page.getByText('Antigravity')).toBeVisible();
+
     // Check if the localStorage token was set
     const token = await page.evaluate(() => localStorage.getItem('auth_token'));
     expect(token).toBe('fake-jwt-token');
