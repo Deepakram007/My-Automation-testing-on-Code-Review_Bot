@@ -12,6 +12,7 @@ import FeedbackLoop from './pages/FeedbackLoop';
 import TeamRules    from './pages/TeamRules';
 import Billing      from './pages/Billing';
 import AuditLogs    from './pages/AuditLogs';
+import Login        from './pages/Login';
 
 import { fetchHealth } from './api/client';
 
@@ -61,6 +62,7 @@ function App() {
               <Route path="/rules"    element={<TeamRules />} />
               <Route path="/billing"  element={<Billing />} />
               <Route path="/audit"    element={<AuditLogs />} />
+              <Route path="/login"    element={<Login />} />
             </Routes>
           </div>
         </div>

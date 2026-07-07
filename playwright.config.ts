@@ -28,6 +28,10 @@ export default defineConfig({
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
     
+    /* Capture screenshot and video on failure */
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
+    
     // Set up API base URL in extraHTTPHeaders or just access it directly in tests
     extraHTTPHeaders: {
       'Accept': 'application/json',

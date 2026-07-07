@@ -4,6 +4,7 @@
 
 <div align="center">
 
+![CI/CD Status](https://img.shields.io/github/actions/workflow/status/your-org/your-repo/test.yml?branch=main&style=for-the-badge&label=Tests)
 ![Node.js](https://img.shields.io/badge/Node.js-18+-339933?style=for-the-badge&logo=node.js&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5+-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)
@@ -391,6 +392,29 @@ The React dashboard (located in `client/`) connects to the backend API and provi
 - **Rules Manager** — CRUD interface to manage team-specific review rules per organization
 - **Billing** — View monthly usage and upgrade subscription tier
 - **Audit Logs** — Security trail of all organization-level actions
+
+---
+
+## 🧪 Testing Strategy
+
+This repository employs a unified, end-to-end testing approach using **Playwright** for both API and UI test suites.
+
+- **API Testing (`tests/api/`)**: Validates REST endpoints, checking HTTP status codes, JSON structures, error handling, and pagination without relying on the browser.
+- **UI Testing (`tests/ui/`)**: Ensures core frontend flows work as expected (e.g., authentication flow, dashboard rendering, navigation, form validation). Tests are categorized using tags like `@smoke` and `@regression`.
+- **CI/CD Integration**: The `.github/workflows/test.yml` GitHub Actions pipeline automatically provisions a PostgreSQL + Redis environment, seeds the database, starts the app, and runs the full test suite on every PR and push to `main`.
+- **Artifacts & Proof**: Upon failure, Playwright captures **screenshots and video recordings**. An HTML report is automatically uploaded as a CI artifact.
+
+### How to Run Tests Locally
+
+```bash
+# Ensure your backend and frontend are running, then execute:
+npm run test:e2e
+```
+
+To view the generated report (includes screenshots/videos of failures):
+```bash
+npx playwright show-report
+```
 
 ---
 
